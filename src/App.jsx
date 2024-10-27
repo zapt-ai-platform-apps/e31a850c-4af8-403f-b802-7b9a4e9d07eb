@@ -3,7 +3,9 @@ import { createEvent } from './supabaseClient';
 
 function App() {
   const [imageFile, setImageFile] = createSignal(null);
-  const [description, setDescription] = createSignal('');
+  const [azureDescription, setAzureDescription] = createSignal('');
+  const [googleDescription, setGoogleDescription] = createSignal('');
+  const [combinedDescription, setCombinedDescription] = createSignal('');
   const [audioUrl, setAudioUrl] = createSignal('');
   const [loading, setLoading] = createSignal(false);
 
@@ -18,7 +20,9 @@ function App() {
     }
 
     setLoading(true);
-    setDescription('');
+    setAzureDescription('');
+    setGoogleDescription('');
+    setCombinedDescription('');
     setAudioUrl('');
 
     try {
@@ -37,11 +41,13 @@ function App() {
 
         if (response.ok) {
           const data = await response.json();
-          setDescription(data.description);
+          setAzureDescription(data.azureDescription);
+          setGoogleDescription(data.googleDescription);
+          setCombinedDescription(`${data.azureDescription}. Detected objects: ${data.googleDescription}.`);
         } else {
           const errorData = await response.json();
           console.error('Error:', errorData.error);
-          alert('Error generating description.');
+          alert('Error generating descriptions.');
         }
 
         setLoading(false);
@@ -49,13 +55,13 @@ function App() {
       reader.readAsDataURL(imageFile());
     } catch (error) {
       console.error('Error:', error);
-      alert('Error generating description.');
+      alert('Error generating descriptions.');
       setLoading(false);
     }
   };
 
   const handleTextToSpeech = async () => {
-    if (!description()) {
+    if (!combinedDescription()) {
       alert('No description available.');
       return;
     }
@@ -63,7 +69,7 @@ function App() {
     setLoading(true);
     try {
       const result = await createEvent('text_to_speech', {
-        text: description(),
+        text: combinedDescription(),
       });
       setAudioUrl(result);
     } catch (error) {
@@ -90,23 +96,27 @@ function App() {
           />
           <button
             onClick={handleDescribeImage}
-            class={`mt-4 w-full px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition duration-300 ease-in-out transform hover:scale-105 cursor-pointer ${loading() ? 'opacity-50 cursor-not-allowed' : ''}`}
+            class={`mt-4 w-full px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition duration-300 ease-in-out transform hover:scale-105 cursor-pointer ${
+              loading() ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
             disabled={loading()}
           >
             {loading() ? 'Processing...' : 'Describe Image'}
           </button>
         </div>
 
-        <Show when={description()}>
+        <Show when={combinedDescription()}>
           <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-bold mb-4 text-purple-600">Description</h2>
-            <p class="text-gray-700">{description()}</p>
+            <h2 class="text-2xl font-bold mb-4 text-purple-600">Combined Description</h2>
+            <p class="text-gray-700">{combinedDescription()}</p>
             <button
               onClick={handleTextToSpeech}
-              class={`mt-4 w-full px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105 cursor-pointer ${loading() ? 'opacity-50 cursor-not-allowed' : ''}`}
+              class={`mt-4 w-full px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105 cursor-pointer ${
+                loading() ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
               disabled={loading()}
             >
-              {loading() ? 'Loading Audio...' : 'Listen to Description'}
+              {loading() ? 'Loading Audio...' : 'Listen to Combined Description'}
             </button>
           </div>
         </Show>

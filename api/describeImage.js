@@ -1,3 +1,5 @@
+import fetch from 'node-fetch';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -14,34 +16,80 @@ export default async function handler(req, res) {
     // Decode base64 image
     const imageBuffer = Buffer.from(image, 'base64');
 
-    // Call external API to get image description
-    const endpoint = `https://${process.env.AZURE_REGION}.api.cognitive.microsoft.com/vision/v3.2/analyze`;
-    const apiKey = process.env.AZURE_VISION_API_KEY;
+    // Azure Computer Vision API
+    const azureEndpoint = `https://${process.env.AZURE_REGION}.api.cognitive.microsoft.com/vision/v3.2/analyze`;
+    const azureApiKey = process.env.AZURE_VISION_API_KEY;
 
-    const params = new URLSearchParams({
+    const azureParams = new URLSearchParams({
       visualFeatures: 'Description',
     });
 
-    const response = await fetch(`${endpoint}?${params.toString()}`, {
+    const azureResponse = await fetch(`${azureEndpoint}?${azureParams.toString()}`, {
       method: 'POST',
       headers: {
-        'Ocp-Apim-Subscription-Key': apiKey,
+        'Ocp-Apim-Subscription-Key': azureApiKey,
         'Content-Type': 'application/octet-stream',
       },
       body: imageBuffer,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error from Vision API:', errorData);
-      return res.status(500).json({ error: 'Error processing image' });
+    if (!azureResponse.ok) {
+      const errorData = await azureResponse.json();
+      console.error('Error from Azure Vision API:', errorData);
+      return res.status(500).json({ error: 'Error processing image with Azure Vision API' });
     }
 
-    const data = await response.json();
+    const azureData = await azureResponse.json();
+    const azureDescription = azureData.description?.captions[0]?.text || 'No description available from Azure Vision API';
 
-    const description = data.description?.captions[0]?.text || 'No description available';
+    // Google Cloud Vision API
+    const googleVisionEndpoint = 'https://vision.googleapis.com/v1/images:annotate';
+    const googleApiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
 
-    res.status(200).json({ description });
+    const googleRequestBody = {
+      requests: [
+        {
+          image: {
+            content: image,
+          },
+          features: [
+            {
+              type: 'LABEL_DETECTION',
+              maxResults: 5,
+            },
+            {
+              type: 'WEB_DETECTION',
+              maxResults: 5,
+            },
+          ],
+        },
+      ],
+    };
+
+    const googleResponse = await fetch(`${googleVisionEndpoint}?key=${googleApiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(googleRequestBody),
+    });
+
+    if (!googleResponse.ok) {
+      const errorData = await googleResponse.json();
+      console.error('Error from Google Vision API:', errorData);
+      return res.status(500).json({ error: 'Error processing image with Google Vision API' });
+    }
+
+    const googleData = await googleResponse.json();
+    const labelAnnotations = googleData.responses[0].labelAnnotations || [];
+    const googleDescription =
+      labelAnnotations.map((label) => label.description).join(', ') ||
+      'No description available from Google Vision API';
+
+    res.status(200).json({
+      azureDescription,
+      googleDescription,
+    });
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ error: 'Error processing image' });
